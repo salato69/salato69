@@ -16,7 +16,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Firebase Sensor Data',
+      title: 'Encrypted Sensor Data',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
@@ -114,7 +114,7 @@ class _SensorDataPageState extends State<SensorDataPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Sensor Data'),
+        title: Text('Encrypted Sensor Data'),
         actions: [
           IconButton(
             icon: Icon(Icons.filter_alt),
@@ -169,9 +169,20 @@ class _SensorDataPageState extends State<SensorDataPage> {
                           Card(
                             margin: EdgeInsets.all(10),
                             child: ListTile(
-                              title: Text('Temperature: ${data['temperature']}°C'),
-                              subtitle: Text('Humidity: ${data['humidity']}%\n'
-                                  'Timestamp: ${data['timestamp']}'),
+                              title: Text(
+                                  'Encrypted AES Key: ${data['encrypted_aes_key'] ?? "Not Available"}'),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                      'Ciphertext: ${data['encrypted_data']?['ciphertext'] ?? "Not Available"}'),
+                                  Text(
+                                      'Nonce: ${data['encrypted_data']?['nonce'] ?? "Not Available"}'),
+                                  Text(
+                                      'Tag: ${data['encrypted_data']?['tag'] ?? "Not Available"}'),
+                                  Text('Timestamp: ${data['timestamp']}'),
+                                ],
+                              ),
                             ),
                           ),
                         ],
