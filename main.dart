@@ -33,6 +33,9 @@ class SensorDataPage extends StatefulWidget {
 class _SensorDataPageState extends State<SensorDataPage> {
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref("sensor_data");
   List<Map<String, dynamic>> _sensorData = [];
+  List<Map<String, dynamic>> _filteredSensorData = [];
+  DateTime? _selectedDate; // For single-day filtering
+  final ScrollController _scrollController = ScrollController(); // Scroll controller
 
   @override
   void initState() {
@@ -42,17 +45,16 @@ class _SensorDataPageState extends State<SensorDataPage> {
 
   void _fetchSensorData() {
     _dbRef.onValue.listen((event) {
-      // Safely handle the snapshot value
       final Object? snapshotValue = event.snapshot.value;
 
       if (snapshotValue == null) {
         setState(() {
           _sensorData = [];
+          _filteredSensorData = [];
         });
         return;
       }
 
-      // Cast snapshot value to Map
       final data = snapshotValue as Map<dynamic, dynamic>;
       final List<Map<String, dynamic>> loadedData = [];
 
@@ -61,7 +63,6 @@ class _SensorDataPageState extends State<SensorDataPage> {
         loadedData.add(sensorRecord);
       });
 
-      // Sort the data by timestamp (latest first)
       loadedData.sort((a, b) {
         final dateA = DateTime.parse(a['timestamp']);
         final dateB = DateTime.parse(b['timestamp']);
@@ -70,8 +71,43 @@ class _SensorDataPageState extends State<SensorDataPage> {
 
       setState(() {
         _sensorData = loadedData;
+        _filteredSensorData = loadedData; // Initially, all data is displayed
       });
     });
+  }
+
+  void _filterDataBySingleDate(DateTime selectedDate) {
+    setState(() {
+      _selectedDate = selectedDate;
+
+      _filteredSensorData = _sensorData.where((data) {
+        final timestamp = DateTime.parse(data['timestamp']);
+        return timestamp.year == selectedDate.year &&
+            timestamp.month == selectedDate.month &&
+            timestamp.day == selectedDate.day;
+      }).toList();
+    });
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+
+    if (picked != null && picked != _selectedDate) {
+      _filterDataBySingleDate(picked);
+    }
+  }
+
+  void _scrollToTop() {
+    _scrollController.animateTo(
+      0.0,
+      duration: Duration(milliseconds: 500),
+      curve: Curves.easeInOut,
+    );
   }
 
   @override
@@ -79,23 +115,76 @@ class _SensorDataPageState extends State<SensorDataPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Sensor Data'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.filter_alt),
+            onPressed: () => _selectDate(context),
+          ),
+        ],
       ),
-      body: _sensorData.isEmpty
-          ? Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              itemCount: _sensorData.length,
-              itemBuilder: (context, index) {
-                final data = _sensorData[index];
-                return Card(
-                  margin: EdgeInsets.all(10),
-                  child: ListTile(
-                    title: Text('Temperature: ${data['temperature']}°C'),
-                    subtitle: Text('Humidity: ${data['humidity']}%\n'
-                        'Timestamp: ${data['timestamp']}'),
-                  ),
-                );
-              },
+      body: Column(
+        children: [
+          if (_selectedDate != null)
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                'Showing data for ${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}',
+                style: TextStyle(fontSize: 16),
+              ),
             ),
+          Expanded(
+            child: _filteredSensorData.isEmpty
+                ? Center(child: Text('No data available for the selected date'))
+                : ListView.builder(
+                    controller: _scrollController,
+                    itemCount: _filteredSensorData.length,
+                    itemBuilder: (context, index) {
+                      final data = _filteredSensorData[index];
+                      final currentDate = DateTime.parse(data['timestamp']).toLocal();
+                      final previousDate = index > 0
+                          ? DateTime.parse(_filteredSensorData[index - 1]['timestamp']).toLocal()
+                          : null;
+
+                      // Check if a header is needed
+                      final showHeader = previousDate == null ||
+                          currentDate.year != previousDate.year ||
+                          currentDate.month != previousDate.month ||
+                          currentDate.day != previousDate.day;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (showHeader)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+                              child: Text(
+                                '${currentDate.year}-${currentDate.month.toString().padLeft(2, '0')}-${currentDate.day.toString().padLeft(2, '0')}',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ),
+                          Card(
+                            margin: EdgeInsets.all(10),
+                            child: ListTile(
+                              title: Text('Temperature: ${data['temperature']}°C'),
+                              subtitle: Text('Humidity: ${data['humidity']}%\n'
+                                  'Timestamp: ${data['timestamp']}'),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _scrollToTop,
+        child: Icon(Icons.arrow_upward),
+      ),
     );
   }
 }
